@@ -1,0 +1,134 @@
+{% extends "core/base.html" %}
+{% block title %}Import Products - {{ business.name }}{% endblock %}
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card shadow">
+            <div class="card-header">
+                <div class="d-flex justify-content-between align-items-center">
+                    <h4 class="mb-0">
+                        <i class="bi bi-upload"></i> Import Products from Excel
+                    </h4>
+                    <a href="{% url 'core:product_list' business.id %}" class="btn btn-outline-secondary">
+                        <i class="bi bi-arrow-left"></i> Back to Products
+                    </a>
+                </div>
+                <p class="text-muted mb-0">{{ business.name }}</p>
+            </div>
+            
+            <div class="card-body">
+                <form method="post" enctype="multipart/form-data">
+                    {% csrf_token %}
+                    
+                    <div class="mb-3">
+                        <label for="{{ form.file.id_for_label }}" class="form-label">Excel File</label>
+                        {{ form.file }}
+                        {% if form.file.errors %}
+                            <div class="text-danger small">{{ form.file.errors.0 }}</div>
+                        {% endif %}
+                        <div class="form-text">{{ form.file.help_text }}</div>
+                    </div>
+                    
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-upload"></i> Upload and Import
+                        </button>
+                        <a href="{% url 'core:product_list' business.id %}" class="btn btn-secondary">
+                            <i class="bi bi-x-circle"></i> Cancel
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+        
+        <!-- Instructions Card -->
+        <div class="card mt-4">
+            <div class="card-header">
+                <h6 class="mb-0"><i class="bi bi-info-circle"></i> Excel File Format Instructions</h6>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6 class="text-primary">Required Columns:</h6>
+                        <ul class="list-unstyled">
+                            <li><strong>name</strong> - Product name (required)</li>
+                            <li><strong>price_usd</strong> - Price in USD (required)</li>
+                        </ul>
+                        
+                        <h6 class="text-success mt-3">Optional Columns:</h6>
+                        <ul class="list-unstyled">
+                            <li><strong>sku</strong> - Product SKU code</li>
+                            <li><strong>description</strong> - Product description</li>
+                            <li><strong>price_lbp</strong> - Price in Lebanese Pounds</li>
+                            <li><strong>stock</strong> - Stock quantity (defaults to 0)</li>
+                        </ul>
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <h6 class="text-info">Example Excel Format:</h6>
+                        <div class="table-responsive">
+                            <table class="table table-sm table-bordered">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>name</th>
+                                        <th>price_usd</th>
+                                        <th>sku</th>
+                                        <th>stock</th>
+                                        <th>description</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td>T-Shirt</td>
+                                        <td>25.99</td>
+                                        <td>TSH001</td>
+                                        <td>50</td>
+                                        <td>Cotton T-Shirt</td>
+                                    </tr>
+                                    <tr>
+                                        <td>Jeans</td>
+                                        <td>45.00</td>
+                                        <td></td>
+                                        <td></td>
+                                        <td>Blue Denim</td>
+                                    </tr>
+                                    <tr>
+                                        <td>Hat</td>
+                                        <td>15.50</td>
+                                        <td>HAT123</td>
+                                        <td>25</td>
+                                        <td></td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="alert alert-info mt-3">
+                    <h6><i class="bi bi-lightbulb"></i> Tips:</h6>
+                    <ul class="mb-0">
+                        <li>Use <strong>.xlsx</strong> format (Excel 2007+)</li>
+                        <li>Leave optional columns empty if you don't have that data</li>
+                        <li>Make sure column headers match exactly (case-sensitive)</li>
+                        <li>Empty rows will be skipped automatically</li>
+                        <li>Invalid rows will show error messages after upload</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Bootstrap Icons CDN -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.7.2/font/bootstrap-icons.css">
+
+<style>
+.card {
+    border: none;
+}
+.table th {
+    font-size: 0.875rem;
+}
+</style>
+{% endblock %}
