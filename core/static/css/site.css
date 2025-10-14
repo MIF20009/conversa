@@ -1,0 +1,73 @@
+/* Conversa Site Theme - Inter + Teal palette */
+:root{
+  --brand-primary:#005f73; /* deep teal */
+  --brand-secondary:#0a9396; /* teal */
+  --brand-accent:#ee9b00; /* amber */
+  --bg-neutral:#f7fafc; /* very light gray */
+  --surface:#ffffff;
+  --text-dark:#0b1320;
+  --text-muted:#6c757d;
+  --radius:8px;
+}
+
+html,body{font-family:'Inter',system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,'Apple Color Emoji','Segoe UI Emoji'; color:var(--text-dark);} 
+body.bg-neutral{background-color:var(--bg-neutral);} 
+
+.maxw{max-width:1100px;}
+.pt-nav{padding-top:4.5rem;} /* space for fixed navbar */
+
+/* Navbar */
+.navbar .navbar-brand{font-weight:700;}
+.text-primary-brand{color:var(--brand-primary)!important;}
+.btn-primary-brand{background-color:var(--brand-primary);color:#fff;border:none;border-radius:var(--radius);box-shadow:0 2px 6px rgba(0,0,0,.08);} 
+.btn-primary-brand:hover{background-color:#004b5a;color:#fff;}
+.btn-secondary-brand{background-color:var(--brand-secondary);color:#fff;border:none;border-radius:var(--radius);} 
+.btn-outline-brand{border:1px solid var(--brand-primary);color:var(--brand-primary);border-radius:var(--radius);} 
+.btn-outline-brand:hover{background-color:var(--brand-primary);color:#fff;}
+.btn-accent{background-color:var(--brand-accent);color:#0b1320;border:none;border-radius:var(--radius);} 
+
+.nav-link{color:var(--text-dark);} 
+.nav-link:hover{color:var(--brand-primary);} 
+
+/* Cards and surfaces */
+.card{border:none;border-radius:12px;box-shadow:0 1px 3px rgba(16,24,40,.06),0 1px 2px rgba(16,24,40,.04);} 
+.card-hover:hover{transform:translateY(-2px);transition:transform .2s ease;} 
+
+/* Messages */
+.alert-brand.alert-success{background:#e6f4ea;color:#0f5132;border:1px solid #badbcc;}
+.alert-brand.alert-info{background:#e7f3ff;color:#084298;border:1px solid #b6d4fe;}
+.alert-brand.alert-warning{background:#fff8e6;color:#664d03;border:1px solid #ffe69c;}
+.alert-brand.alert-danger{background:#fde7e9;color:#842029;border:1px solid #f5c2c7;}
+
+/* Tables */
+.table thead th{color:var(--text-dark);} 
+.table tbody tr:nth-child(odd){background-color:#fafbff;} 
+.table tbody tr:hover{background-color:#f2f6ff;} 
+
+/* Forms */
+.form-control,.form-select{border-radius:10px;border-color:#dde3ea;}
+.form-control:focus,.form-select:focus{border-color:var(--brand-secondary);box-shadow:0 0 0 .25rem rgba(10,147,150,.15);} 
+.form-check-input:focus{box-shadow:0 0 0 .25rem rgba(10,147,150,.15);} 
+.input-group-text{background:#f1f5f9;border-color:#dde3ea;}
+
+/* Product cards */
+.product-thumb{width:100%;aspect-ratio:1/1;object-fit:cover;border-radius:12px;background:#f1f5f9;}
+.stock-badge.in{background:#e6f4ea;color:#0f5132;border:1px solid #badbcc;border-radius:999px;padding:.25rem .5rem;font-size:.75rem;}
+.stock-badge.out{background:#fde7e9;color:#842029;border:1px solid #f5c2c7;border-radius:999px;padding:.25rem .5rem;font-size:.75rem;}
+
+/* Sticky action bar */
+.sticky-actions{position:sticky;top:4.5rem;z-index:1010;background:var(--surface);border:1px solid #e9edf2;border-radius:12px;padding:.75rem 1rem;box-shadow:0 1px 2px rgba(16,24,40,.06);} 
+
+/* Footer */
+footer a.link-secondary:hover{color:var(--brand-primary)!important;}
+
+/* Accessibility focus */
+:focus-visible{outline:3px solid rgba(238,155,0,.6);outline-offset:2px;}
+
+/* Responsive tweaks */
+@media (max-width: 576px){
+  .pt-nav{padding-top:4rem;}
+  .sticky-actions{top:4rem;}
+}
+
+
