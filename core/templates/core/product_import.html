@@ -20,7 +20,7 @@
                     <li>Confirm to start the import.</li>
                 </ol>
                 <div class="d-flex gap-2 mb-3 flex-wrap">
-                    <a class="btn btn-outline-brand" href="{% static 'templates/product_import_template.xlsx' %}"><i class="bi bi-file-earmark-spreadsheet"></i> Download Template</a>
+                    <a class="btn btn-outline-brand" href="{% url 'core:product_import' business.id %}?download_template=1"><i class="bi bi-file-earmark-spreadsheet"></i> Download Template</a>
                 </div>
 
                 <form method="post" enctype="multipart/form-data">
@@ -67,6 +67,7 @@
                             <li><strong>description</strong> - Product description</li>
                             <li><strong>price_lbp</strong> - Price in Lebanese Pounds</li>
                             <li><strong>stock</strong> - Stock quantity (defaults to 0)</li>
+                            <li><strong>category</strong> - Product category (will be created if doesn't exist)</li>
                         </ul>
                     </div>
 
@@ -81,6 +82,7 @@
                                         <th>sku</th>
                                         <th>stock</th>
                                         <th>description</th>
+                                        <th>category</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -90,6 +92,7 @@
                                         <td>TSH001</td>
                                         <td>50</td>
                                         <td>Cotton T-Shirt</td>
+                                        <td>Clothing</td>
                                     </tr>
                                     <tr>
                                         <td>Jeans</td>
@@ -97,12 +100,14 @@
                                         <td></td>
                                         <td></td>
                                         <td>Blue Denim</td>
+                                        <td>Clothing</td>
                                     </tr>
                                     <tr>
                                         <td>Hat</td>
                                         <td>15.50</td>
                                         <td>HAT123</td>
                                         <td>25</td>
+                                        <td></td>
                                         <td></td>
                                     </tr>
                                 </tbody>

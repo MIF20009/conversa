@@ -1,5 +1,6 @@
 from django import forms
-from .models import Product
+from django.db import models
+from .models import Product, Category
 import json
 
 class ProductForm(forms.ModelForm):
@@ -64,15 +65,7 @@ class ProductForm(forms.ModelForm):
         help_text="Product brand"
     )
     
-    category = forms.CharField(
-        max_length=100,
-        required=False,
-        widget=forms.TextInput(attrs={
-            'placeholder': 'e.g., Electronics, Clothing, Books',
-            'class': 'form-control'
-        }),
-        help_text="Product category"
-    )
+    # Drop the free-text category; use FK dropdown from model field
     
     tags = forms.CharField(
         max_length=255,
@@ -86,7 +79,8 @@ class ProductForm(forms.ModelForm):
 
     class Meta:
         model = Product
-        fields = ['sku','name','description','price_usd','price_lbp','stock','image','active']
+        # Drop image from form; add category select
+        fields = ['sku','name','description','price_usd','price_lbp','stock','active','category']
         widgets = {
             'name': forms.TextInput(attrs={'class': 'form-control'}),
             'sku': forms.TextInput(attrs={'class': 'form-control'}),
@@ -94,12 +88,20 @@ class ProductForm(forms.ModelForm):
             'price_usd': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01'}),
             'price_lbp': forms.NumberInput(attrs={'class': 'form-control'}),
             'stock': forms.NumberInput(attrs={'class': 'form-control'}),
-            'image': forms.FileInput(attrs={'class': 'form-control'}),
             'active': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+            'category': forms.Select(attrs={'class': 'form-select'}),
         }
 
     def __init__(self, *args, **kwargs):
+        # Extract business from kwargs before calling super()
+        business = kwargs.pop('business', None)
         super().__init__(*args, **kwargs)
+        
+        # Filter categories to show only those for this business
+        if business:
+            self.fields['category'].queryset = Category.objects.filter(
+                models.Q(business=business) | models.Q(is_global=True)
+            )
         
         # Populate metadata fields from existing JSON data
         if self.instance and self.instance.metadata:
@@ -112,7 +114,7 @@ class ProductForm(forms.ModelForm):
                     self.fields['weight'].initial = metadata.get('weight', '')
                     self.fields['dimensions'].initial = metadata.get('dimensions', '')
                     self.fields['brand'].initial = metadata.get('brand', '')
-                    self.fields['category'].initial = metadata.get('category', '')
+                    # Do not map 'category' into metadata anymore
                     self.fields['tags'].initial = ', '.join(metadata.get('tags', []))
             except (json.JSONDecodeError, TypeError):
                 pass
@@ -135,8 +137,8 @@ class ProductForm(forms.ModelForm):
         if tags:
             metadata['tags'] = tags
             
-        # Process single-value fields
-        for field in ['material', 'weight', 'dimensions', 'brand', 'category']:
+        # Process single-value fields (category removed from metadata)
+        for field in ['material', 'weight', 'dimensions', 'brand']:
             value = self.cleaned_data.get(field, '').strip()
             if value:
                 metadata[field] = value

@@ -30,7 +30,28 @@ SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-@nstqk473x44+f=j(qntd-(ke@
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.getenv('DEBUG', 'True') == 'True'
 
-ALLOWED_HOSTS = []
+# Get ngrok URL from environment variable
+NGROK_URL = os.getenv('NGROK_URL', '')
+
+ALLOWED_HOSTS = [
+    'localhost',
+    '127.0.0.1',
+]
+
+# Add ngrok URL if provided
+if NGROK_URL:
+    ALLOWED_HOSTS.append(NGROK_URL)
+
+# CSRF settings
+CSRF_TRUSTED_ORIGINS = []
+
+# Add ngrok URL to CSRF trusted origins if provided
+if NGROK_URL:
+    CSRF_TRUSTED_ORIGINS.append(f'https://{NGROK_URL}')
+
+# Security settings for HTTPS
+SECURE_SSL_REDIRECT = False  # Let ngrok handle SSL
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 
 
 # Application definition

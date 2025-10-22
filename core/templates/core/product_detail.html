@@ -1,0 +1,56 @@
+{% extends "core/base.html" %}
+{% block title %}{{ product.name }} - {{ business.name }}{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h4 class="mb-0">Product Info</h4>
+  <div>
+    <a href="{% url 'core:product_edit' business.id product.id %}" class="btn btn-outline-primary btn-sm"><i class="bi bi-pencil"></i> Edit</a>
+    <a href="{% url 'core:product_list' business.id %}" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-left"></i> Back</a>
+  </div>
+  </div>
+<div class="card p-3">
+  <div class="row g-3">
+    <div class="col-md-8">
+      <h5 class="mb-1">{{ product.name }}</h5>
+      <p class="text-muted mb-2">SKU: {{ product.sku|default:'—' }}</p>
+      <p>{{ product.description|default:'No description' }}</p>
+      <div class="row">
+        <div class="col-sm-6 mb-2"><strong>Category:</strong> {{ product.category.name|default:'—' }}</div>
+        <div class="col-sm-6 mb-2"><strong>Status:</strong> {% if product.active %}Active{% else %}Inactive{% endif %}</div>
+        <div class="col-sm-6 mb-2"><strong>Price (USD):</strong> ${{ product.price_usd }}</div>
+        <div class="col-sm-6 mb-2"><strong>Price (LBP):</strong> {{ product.price_lbp|default:'—' }}</div>
+        <div class="col-sm-6 mb-2"><strong>Stock:</strong> {{ product.stock }}</div>
+      </div>
+      
+      {% if product.metadata %}
+      <hr class="my-3">
+      <h6>Product Details</h6>
+      <div class="row">
+        {% if product.metadata.brand %}
+        <div class="col-sm-6 mb-2"><strong>Brand:</strong> {{ product.metadata.brand }}</div>
+        {% endif %}
+        {% if product.metadata.material %}
+        <div class="col-sm-6 mb-2"><strong>Material:</strong> {{ product.metadata.material }}</div>
+        {% endif %}
+        {% if product.metadata.sizes %}
+        <div class="col-sm-6 mb-2"><strong>Sizes:</strong> {{ product.metadata.sizes|join:", " }}</div>
+        {% endif %}
+        {% if product.metadata.colors %}
+        <div class="col-sm-6 mb-2"><strong>Colors:</strong> {{ product.metadata.colors|join:", " }}</div>
+        {% endif %}
+        {% if product.metadata.weight %}
+        <div class="col-sm-6 mb-2"><strong>Weight:</strong> {{ product.metadata.weight }}</div>
+        {% endif %}
+        {% if product.metadata.dimensions %}
+        <div class="col-sm-6 mb-2"><strong>Dimensions:</strong> {{ product.metadata.dimensions }}</div>
+        {% endif %}
+        {% if product.metadata.tags %}
+        <div class="col-sm-6 mb-2"><strong>Tags:</strong> {{ product.metadata.tags|join:", " }}</div>
+        {% endif %}
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}
+

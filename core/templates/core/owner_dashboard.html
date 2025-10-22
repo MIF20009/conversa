@@ -13,98 +13,73 @@
         </div>
 
         {% if businesses %}
-
-            {% if businesses|length == 1 %}
-                {% with b=businesses.0 %}
-                <div class="row g-3 mb-4">
-                    <div class="col-12">
-                        <div class="card p-3">
-                            <div class="d-flex justify-content-between align-items-center flex-wrap gap-3">
+            <div class="row">
+                {% for business in businesses %}
+                <div class="col-md-6 {% if businesses|length == 1 %}col-lg-12{% else %}col-lg-6{% endif %} mb-4">
+                    <div class="card card-hover">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between align-items-start mb-3">
                                 <div>
-                                    <h4 class="mb-1">{{ b.name }}</h4>
-                                    {% if b.active %}
+                                    <h4 class="mb-1">{{ business.name }}</h4>
+                                    {% if business.active %}
                                         <span class="badge bg-success">Active</span>
                                     {% else %}
                                         <span class="badge bg-warning text-dark">Inactive</span>
                                     {% endif %}
                                 </div>
-                                <div class="d-flex gap-4">
-                                    <div><span class="d-block text-muted small">Products</span><span class="fw-semibold">{{ b.products.count }}</span></div>
-                                    <div><span class="d-block text-muted small">Active Products</span><span class="fw-semibold">{{ b.products.all|dictsort:'active'|length }}</span></div>
-                                    <div><span class="d-block text-muted small">Last import</span><span class="fw-semibold">{% if b.last_import_at %}{{ b.last_import_at|date:'M j, Y' }}{% else %}—{% endif %}</span></div>
-                                </div>
-                                <div class="ms-auto">
-                                    <a href="{% url 'core:product_create' b.id %}" class="btn btn-primary-brand me-2"><i class="bi bi-plus-circle"></i> Add Product</a>
-                                    <a href="{% url 'core:product_import' b.id %}" class="btn btn-secondary-brand"><i class="bi bi-upload"></i> Import</a>
-                                </div>
                             </div>
-                        </div>
-                    </div>
-                </div>
-                {% endwith %}
-            {% endif %}
 
-            <div class="row">
-                {% for business in businesses %}
-                <div class="col-md-6 col-lg-4 mb-4">
-                    <div class="card h-100 card-hover">
-                        <div class="card-body">
-                            <div class="d-flex justify-content-between align-items-start mb-3">
-                                <h5 class="card-title mb-0">{{ business.name }}</h5>
-                                {% if not business.active %}
-                                    <span class="badge bg-warning text-dark">Inactive</span>
-                                {% else %}
-                                    <span class="badge bg-success">Active</span>
+                            <div class="row mb-3">
+                                {% if business.whatsapp_number %}
+                                <div class="col-md-6 mb-2">
+                                    <small class="text-muted d-block">WhatsApp</small>
+                                    <span><i class="bi bi-whatsapp text-success"></i> {{ business.whatsapp_number }}</span>
+                                </div>
+                                {% endif %}
+                                {% if business.instagram_account %}
+                                <div class="col-md-6 mb-2">
+                                    <small class="text-muted d-block">Instagram</small>
+                                    <span><i class="bi bi-instagram text-danger"></i> {{ business.instagram_account }}</span>
+                                </div>
                                 {% endif %}
                             </div>
 
-                            {% if business.whatsapp_number %}
-                                <p class="text-muted small mb-2">
-                                    <i class="bi bi-whatsapp"></i> {{ business.whatsapp_number }}
-                                </p>
-                            {% endif %}
-
-                            {% if business.instagram_account %}
-                                <p class="text-muted small mb-3">
-                                    <i class="bi bi-instagram"></i> {{ business.instagram_account }}
-                                </p>
-                            {% endif %}
-
-                            <div class="mb-3">
-                                <small class="text-muted">
-                                    {{ business.products.count }} products
-                                </small>
+                            <div class="d-flex gap-4 mb-3">
+                                <div>
+                                    <small class="text-muted d-block">Total Products</small>
+                                    <span class="fw-semibold fs-5">{{ business.products.count }}</span>
+                                </div>
+                                <div>
+                                    <small class="text-muted d-block">In Stock</small>
+                                    <span class="fw-semibold fs-5 text-success">{{ business.in_stock_count }}</span>
+                                </div>
                             </div>
                         </div>
 
-                        <div class="card-footer bg-transparent">
-                            <div class="row g-2">
-                                <div class="col-6">
-                                    <a href="{% url 'core:product_list' business.id %}" 
-                                       class="btn btn-outline-brand btn-sm w-100">
-                                        <i class="bi bi-box"></i> Products
-                                    </a>
-                                </div>
-                                <div class="col-6">
-                                    <a href="{% url 'core:product_create' business.id %}" 
-                                       class="btn btn-primary-brand btn-sm w-100">
-                                        <i class="bi bi-plus"></i> Add Product
-                                    </a>
-                                </div>
-                                <div class="col-6">
-                                    <a href="{% url 'core:product_import' business.id %}" 
-                                       class="btn btn-secondary-brand btn-sm w-100">
-                                        <i class="bi bi-upload"></i> Import Excel
-                                    </a>
-                                </div>
-                                <div class="col-6">
-                                    {% if user.is_superuser %}
-                                        <a href="/admin/core/business/{{ business.id }}/change/" 
-                                           class="btn btn-outline-secondary btn-sm w-100">
-                                            <i class="bi bi-gear"></i> Edit
-                                        </a>
-                                    {% endif %}
-                                </div>
+                        <div class="card-footer bg-transparent border-top">
+                            <div class="d-flex flex-wrap gap-2">
+                                <a href="{% url 'core:product_list' business.id %}" 
+                                   class="btn btn-outline-brand btn-sm">
+                                    <i class="bi bi-box"></i> View Products
+                                </a>
+                                <a href="{% url 'core:product_create' business.id %}" 
+                                   class="btn btn-primary-brand btn-sm">
+                                    <i class="bi bi-plus-circle"></i> Add Product
+                                </a>
+                                <a href="{% url 'core:product_import' business.id %}" 
+                                   class="btn btn-secondary-brand btn-sm">
+                                    <i class="bi bi-upload"></i> Import Excel
+                                </a>
+                                <a href="{% url 'core:category_list' business.id %}" 
+                                   class="btn btn-outline-info btn-sm">
+                                    <i class="bi bi-tags"></i> Categories
+                                </a>
+                                {% if user.is_superuser %}
+                                <a href="/admin/core/business/{{ business.id }}/change/" 
+                                   class="btn btn-outline-secondary btn-sm ms-auto">
+                                    <i class="bi bi-gear"></i> Settings
+                                </a>
+                                {% endif %}
                             </div>
                         </div>
                     </div>

@@ -1,0 +1,39 @@
+{% extends "core/base.html" %}
+{% block title %}Add Category - {{ business.name }}{% endblock %}
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h4 class="mb-0">
+                <i class="bi bi-plus-circle"></i> Add New Category
+            </h4>
+            <a href="{% url 'core:category_list' business.id %}" class="btn btn-outline-brand">
+                <i class="bi bi-arrow-left"></i> Back to Categories
+            </a>
+        </div>
+        <p class="text-muted">{{ business.name }}</p>
+
+        <div class="card p-3">
+            <form method="post">
+                {% csrf_token %}
+                
+                <div class="mb-3">
+                    <label for="name" class="form-label">Category Name <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control" id="name" name="name" 
+                           placeholder="e.g., Electronics, Clothing, Books" required>
+                    <div class="form-text">This category will be specific to {{ business.name }}.</div>
+                </div>
+
+                <div class="d-flex gap-2 mt-3">
+                    <button type="submit" class="btn btn-primary-brand">
+                        <i class="bi bi-check-circle"></i> Create Category
+                    </button>
+                    <a href="{% url 'core:category_list' business.id %}" class="btn btn-outline-brand">
+                        <i class="bi bi-x-circle"></i> Cancel
+                    </a>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

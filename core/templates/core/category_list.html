@@ -1,0 +1,81 @@
+{% extends "core/base.html" %}
+{% block title %}{{ business.name }} - Categories{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <div>
+        <h3 class="mb-1">{{ business.name }} - Categories</h3>
+        <p class="text-muted mb-0">{{ categories|length }} categories</p>
+    </div>
+    <div class="d-none d-md-flex">
+        <a class="btn btn-outline-brand me-2" href="{% url 'core:owner_dashboard' %}">
+            <i class="bi bi-arrow-left"></i> Back to Dashboard
+        </a>
+        <a class="btn btn-primary-brand me-2" href="{% url 'core:category_create' business.id %}">
+            <i class="bi bi-plus-circle"></i> Add Category
+        </a>
+    </div>
+</div>
+
+<div class="sticky-actions mb-4">
+    <div class="d-md-none mt-2">
+        <a class="btn btn-outline-brand w-100" href="{% url 'core:owner_dashboard' %}"><i class="bi bi-arrow-left"></i> Back to Dashboard</a>
+    </div>
+</div>
+
+{% if categories %}
+    <div class="card">
+        <div class="table-responsive">
+            <table class="table align-middle">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Products</th>
+                        <th>Type</th>
+                        <th class="text-end">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for category in categories %}
+                    <tr>
+                        <td class="fw-semibold">{{ category.name }}</td>
+                        <td>{{ category.products.count }}</td>
+                        <td>
+                            {% if category.is_global %}
+                                <span class="badge bg-info">Global</span>
+                            {% else %}
+                                <span class="badge bg-primary">Business</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-end">
+                            <div class="btn-group btn-group-sm" role="group">
+                                <a href="{% url 'core:product_list' business.id %}?category={{ category.id }}" 
+                                   class="btn btn-outline-secondary" title="View Products">
+                                    <i class="bi bi-box"></i>
+                                </a>
+                                <a href="{% url 'core:category_delete' business.id category.id %}" 
+                                   class="btn btn-outline-danger" title="Delete">
+                                    <i class="bi bi-trash"></i>
+                                </a>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+{% else %}
+    <div class="text-center py-5">
+        <div class="mb-4">
+            <i class="bi bi-tags display-1 text-muted"></i>
+        </div>
+        <h4 class="text-muted">No Categories Yet</h4>
+        <p class="text-muted">Start by adding your first category to organize your products.</p>
+        <div class="mt-4">
+            <a class="btn btn-primary-brand me-2" href="{% url 'core:category_create' business.id %}">
+                <i class="bi bi-plus-circle"></i> Add First Category
+            </a>
+        </div>
+    </div>
+{% endif %}
+{% endblock %}
