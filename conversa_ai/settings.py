@@ -160,4 +160,9 @@ MEDIA_ROOT = BASE_DIR / 'media'
 # Authentication settings
 LOGIN_URL = 'login'
 LOGIN_REDIRECT_URL = 'core:owner_dashboard'
-LOGOUT_REDIRECT_URL = 'core:home' 
+LOGOUT_REDIRECT_URL = 'core:home'
+
+# Supabase configuration
+SUPABASE_URL = os.getenv('SUPABASE_URL', '')
+SUPABASE_KEY = os.getenv('SUPABASE_SERVICE_ROLE_KEY', '')  # Use service role key for server-side operations
+SUPABASE_BUCKET = os.getenv('SUPABASE_BUCKET', 'product-images') 

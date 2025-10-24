@@ -79,7 +79,6 @@ class ProductForm(forms.ModelForm):
 
     class Meta:
         model = Product
-        # Drop image from form; add category select
         fields = ['sku','name','description','price_usd','price_lbp','stock','active','category']
         widgets = {
             'name': forms.TextInput(attrs={'class': 'form-control'}),
@@ -91,6 +90,13 @@ class ProductForm(forms.ModelForm):
             'active': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
             'category': forms.Select(attrs={'class': 'form-select'}),
         }
+    
+    # Add image field manually to handle file uploads
+    image = forms.FileField(
+        required=False,
+        widget=forms.FileInput(attrs={'class': 'form-control', 'accept': 'image/*'}),
+        help_text="Upload a product image (JPG, PNG, GIF). Max size: 5MB."
+    )
 
     def __init__(self, *args, **kwargs):
         # Extract business from kwargs before calling super()
@@ -147,6 +153,31 @@ class ProductForm(forms.ModelForm):
         
         if commit:
             instance.save()
+            
+            # Handle image upload to Supabase
+            image_file = self.cleaned_data.get('image')
+            if image_file and hasattr(image_file, 'name'):  # Check if it's actually a file object
+                try:
+                    from .supabase_utils import upload_image_to_supabase
+                    upload_result = upload_image_to_supabase(image_file, instance.id)
+                    if upload_result['success']:
+                        instance.image = upload_result['url']
+                        instance.save(update_fields=['image'])
+                    else:
+                        # Log error but don't fail the form
+                        import logging
+                        logger = logging.getLogger(__name__)
+                        logger.error(f"Failed to upload image: {upload_result['error']}")
+                except Exception as e:
+                    # If Supabase is not configured, just log the error
+                    import logging
+                    logger = logging.getLogger(__name__)
+                    logger.warning(f"Supabase not configured or error uploading image: {str(e)}")
+            elif not image_file:
+                # If no image file was uploaded, don't change the existing image
+                # This prevents overwriting existing images with default values
+                pass
+        
         return instance
 
 class ExcelUploadForm(forms.Form):

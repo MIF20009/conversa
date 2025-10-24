@@ -54,7 +54,7 @@
                         </div>
                     </div>
 
-                    <!-- Right column: pricing and stock (image hidden for now) -->
+                    <!-- Right column: pricing, stock, and image -->
                     <div class="col-lg-5">
                         <div class="row">
                             <div class="col-sm-6 mb-3">
@@ -79,7 +79,22 @@
                             {{ form.stock }}
                             {% if form.stock.errors %}<div class="text-danger small">{{ form.stock.errors.0 }}</div>{% endif %}
                         </div>
-                        <!-- Image field removed from UI for now -->
+                        
+                        <!-- Image Upload Section -->
+                        <div class="mb-3">
+                            <label for="{{ form.image.id_for_label }}" class="form-label">Product Image</label>
+                            {{ form.image }}
+                            {% if form.image.errors %}<div class="text-danger small">{{ form.image.errors.0 }}</div>{% endif %}
+                            <div class="form-text">Upload a product image (JPG, PNG, GIF). Max size: 5MB.</div>
+                            
+                            <!-- Show current image if editing -->
+                            {% if product and product.image %}
+                            <div class="mt-2">
+                                <p class="text-muted small">Current image:</p>
+                                <img src="{{ product.image }}" alt="{{ product.name }}" class="img-fluid rounded" style="max-height: 150px; object-fit: cover;">
+                            </div>
+                            {% endif %}
+                        </div>
                     </div>
                 </div>
 

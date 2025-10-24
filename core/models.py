@@ -93,7 +93,7 @@ class Product(models.Model):
     price_usd = models.DecimalField(max_digits=12, decimal_places=2)
     price_lbp = models.BigIntegerField(blank=True, null=True, help_text="Store as integer LBP")
     stock = models.IntegerField(default=0)
-    image = models.ImageField(upload_to='product_images/', blank=True, null=True)
+    image = models.URLField(max_length=500, blank=True, null=True, help_text="URL of the product image stored in Supabase")
     metadata = models.JSONField(blank=True, null=True)  # sizes, colors, etc.
     active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
