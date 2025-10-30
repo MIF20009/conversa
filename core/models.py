@@ -203,3 +203,39 @@ class Category(models.Model):
 
     def __str__(self):
         return self.name
+
+
+class ProductEmbeddings(models.Model):
+    """Store OpenAI embeddings for product images to enable similarity search"""
+    product = models.OneToOneField(Product, on_delete=models.CASCADE, related_name='embedding')
+    business = models.ForeignKey(Business, on_delete=models.CASCADE)
+    image_url = models.URLField(max_length=500)
+    embedding = models.TextField(help_text="Vector embedding as JSON string")  # Will store as text, cast to vector in DB
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'product_embeddings'
+        verbose_name = 'Product Embedding'
+        verbose_name_plural = 'Product Embeddings'
+
+    def __str__(self):
+        return f"Embedding for {self.product.name}"
+
+
+class MediaToProductMap(models.Model):
+    """Map media (images/videos) to products with confidence scores"""
+    media_id = models.CharField(max_length=255, help_text="Instagram media ID or custom identifier")
+    product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name='media_mappings')
+    business = models.ForeignKey(Business, on_delete=models.CASCADE)
+    confidence = models.FloatField(help_text="Similarity score (0.0 to 1.0)")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'media_to_product_map'
+        verbose_name = 'Media to Product Mapping'
+        verbose_name_plural = 'Media to Product Mappings'
+        unique_together = ['media_id', 'business']  # One mapping per media per business
+
+    def __str__(self):
+        return f"{self.media_id} → {self.product.name} ({self.confidence:.2f})"

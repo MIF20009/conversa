@@ -9,6 +9,7 @@ from django.contrib import messages
 import json
 import logging
 from .models import Business, Product, Customer, MessageLog, Category
+from django.core.cache import cache
 from .forms import ProductForm, ExcelUploadForm
 from .instagram_api import (
     exchange_code_for_token, exchange_short_lived_for_long_lived,
@@ -523,6 +524,10 @@ def _handle_webhook_message(request):
                     logger.info(f"🔥 FOUND {len(entry['messaging'])} MESSAGING EVENTS")
                     for j, event in enumerate(entry['messaging']):
                         logger.info(f"🔥 PROCESSING MESSAGING EVENT {j}: {event}")
+                        # Ignore read receipts and delivery receipts
+                        if 'read' in event or 'delivery' in event:
+                            logger.info("Ignoring read/delivery receipt event")
+                            continue
                         _process_messaging_event(event, entry.get('id'))
                 else:
                     logger.info(f"🔥 NO MESSAGING IN ENTRY {i}")
@@ -565,10 +570,35 @@ def _process_messaging_event(event, page_id):
             return
         
         # Extract message data
-        sender_id = event.get('sender', {}).get('id')
+        # Try different paths to get sender_id
+        sender_id = None
+        if 'sender' in event:
+            sender_id = event['sender'].get('id')
+        elif 'from' in event:
+            # Sometimes it's 'from' instead of 'sender'
+            sender_id = event['from'].get('id')
+        
         message_data = event.get('message', {})
         message_text = message_data.get('text', '')
+        message_mid = message_data.get('mid')
+        
+        # Ignore page echo messages to prevent loops/duplicates
+        if message_data.get('is_echo'):
+            logger.info("Ignoring echo message from page")
+            return
+
+        # Idempotency: skip if we've already processed this message id recently
+        if message_mid:
+            cache_key_mid = f"ig_processed_mid:{message_mid}"
+            if cache.get(cache_key_mid):
+                logger.info("Skipping already-processed message by mid")
+                return
+            # mark processed for 5 minutes
+            cache.set(cache_key_mid, True, timeout=300)
+        
+        logger.info(f"🚀 RAW EVENT: {json.dumps(event, indent=2)}")
         logger.info(f"🚀 SENDER_ID: {sender_id}")
+        logger.info(f"🚀 PAGE_ID: {page_id}")
         logger.info(f"🚀 MESSAGE_DATA: {message_data}")
         logger.info(f"🚀 MESSAGE_TEXT: {message_text}")
         
@@ -598,21 +628,27 @@ def _process_messaging_event(event, page_id):
         logger.info(f"🔍 MESSAGE DATA: {json.dumps(message_data, indent=2)}")
         logger.info(f"🔍 MESSAGE DATA KEYS: {list(message_data.keys())}")
         
-        if not message_text:
-            logger.info("No message text found")
+        # Check if this is a media-only message
+        has_attachments = 'attachments' in message_data and message_data['attachments']
+        if not message_text and not has_attachments:
+            logger.info("No message text or attachments found")
             return
         
-        # Handle case where sender_id is same as page_id (webhook config issue)
-        if sender_id == page_id or not sender_id:
-            logger.warning(f"Invalid sender ID: {sender_id}. Using page_id as fallback.")
-            from django.utils import timezone
-            sender_id = f"user_{page_id}_{timezone.now().timestamp()}"
+        # Handle case where sender_id is same as page_id or missing
+        # TEMPORARY: Allow processing but warn about sender ID
+        if not sender_id or sender_id == page_id:
+            logger.error(f"Invalid sender ID: {sender_id}. Cannot send response to customer.")
+            # Still allow processing to see if we can extract correct sender from event
+            # Don't return yet, continue to see if post context processing can work
+            if not message_text and not has_attachments:
+                # No content to process, exit early
+                return
         
         # Log incoming message
         MessageLog.objects.create(
             business=business,
             sender_id=sender_id,
-            incoming_text=message_text,
+            incoming_text=message_text or '[Media only]',
             direction='incoming'
         )
         
@@ -629,6 +665,34 @@ def _process_messaging_event(event, page_id):
         
         # Generate AI response with post context
         try:
+            # For media-only messages, process the media and respond based on matches
+            if not message_text and has_attachments:
+                # Let the media processing handle the response
+                # Don't generate an AI response here for media-only messages
+                logger.info("Media-only message, processing media attachments...")
+                # The media processing will handle generating and sending a response
+                
+                # Process media attachments for product matching
+                _process_media_attachments(business, sender_id, message_data)
+                return
+            
+            # Check if this is a post context request (user asking about a post they replied to)
+            logger.info(f"🔍 CHECKING FINAL POST CONTEXT: final_post_context={final_post_context}")
+            
+            # Only process image if caption is empty or unclear
+            has_caption = final_post_context and 'post_caption' in final_post_context and final_post_context['post_caption']
+            has_media_url = final_post_context and 'media_url' in final_post_context
+            
+            logger.info(f"🔍 Has caption: {has_caption}, Has media_url: {has_media_url}")
+            
+            if has_media_url and not has_caption:
+                # User replied to a post WITHOUT caption - use image matching
+                logger.info(f"🔥🔥🔥 Post has no caption, processing post image for matching...")
+                _process_post_image_for_matching(business, sender_id, final_post_context)
+                return
+            else:
+                logger.info(f"⚠️ Skipping image matching - caption is available (has_caption={has_caption})")
+            
             # Enhance message with post context if available
             enhanced_message = _enhance_message_with_post_context(message_text, final_post_context)
             logger.info(f"🔍 Original message: {message_text}")
@@ -677,9 +741,110 @@ def _process_messaging_event(event, page_id):
                 direction='outgoing',
                 error_message=str(e)
             )
+        
+        # If we didn't already process via post context, process media attachments
+        if not (final_post_context and final_post_context.get('media_url') and not (final_post_context.get('post_caption'))):
+            _process_media_attachments(business, sender_id, message_data)
             
     except Exception as e:
         logger.error(f"Error processing messaging event: {str(e)}")
+
+
+def _process_post_image_for_matching(business, sender_id, post_context):
+    """
+    Process a post's image for product matching when user replies to a post without clear caption.
+    
+    Args:
+        business: Business instance
+        sender_id: Sender ID
+        post_context: Post context with media_url
+    """
+    try:
+        media_url = post_context.get('media_url')
+        if not media_url:
+            logger.warning("No media_url in post_context for image matching")
+            return
+        
+        logger.info(f"Processing post image for matching: {media_url}")
+        
+        # Process the post's image using the media processing function
+        from .tasks import process_media
+        logger.info(f"Processing post image synchronously: {media_url}")
+        result = process_media(
+            media_url=media_url,
+            business_id=business.id,
+            media_id=f"post_{sender_id}_{int(timezone.now().timestamp())}",
+            sender_id=sender_id,
+            thumbnail_url=post_context.get('thumbnail_url')
+        )
+        logger.info(f"Post image processing completed: {result}")
+        
+    except Exception as e:
+        logger.error(f"Error processing post image: {str(e)}")
+
+
+def _process_media_attachments(business, sender_id, message_data):
+    """
+    Process media attachments for product matching.
+    
+    Args:
+        business: Business instance
+        sender_id: Sender ID
+        message_data: Message data containing attachments
+    """
+    try:
+        if 'attachments' not in message_data:
+            return
+        
+        attachments = message_data['attachments']
+        for attachment in attachments:
+            att_type = attachment.get('type')
+            if att_type in ['image', 'video']:
+                media_url = attachment.get('payload', {}).get('url')
+                if media_url:
+                    logger.info(f"Processing media attachment: {media_url}")
+                    
+                    # Process media synchronously (Celery not available)
+                    try:
+                        from .tasks import process_media
+                        logger.info(f"Processing media synchronously: {media_url}")
+                        result = process_media(
+                            media_url=media_url,
+                            business_id=business.id,
+                            media_id=f"attachment_{sender_id}_{int(timezone.now().timestamp())}",
+                            sender_id=sender_id
+                        )
+                        logger.info(f"Media processing completed: {result}")
+                    except Exception as e:
+                        logger.error(f"Failed to process media: {str(e)}")
+            elif att_type == 'ig_reel':
+                payload = attachment.get('payload', {})
+                reel_video_id = payload.get('reel_video_id')
+                media_url = None
+                if reel_video_id:
+                    logger.info(f"Fetching reel media for reel_video_id: {reel_video_id}")
+                    reel_info = _fetch_reel_info(reel_video_id)
+                    if reel_info and reel_info.get('media_url'):
+                        media_url = reel_info['media_url']
+                # Fallback to payload url if API didn't return media_url
+                if not media_url:
+                    media_url = payload.get('url')
+                if media_url:
+                    try:
+                        from .tasks import process_media
+                        logger.info(f"Processing reel media synchronously: {media_url}")
+                        result = process_media(
+                            media_url=media_url,
+                            business_id=business.id,
+                            media_id=f"reel_{sender_id}_{int(timezone.now().timestamp())}",
+                            sender_id=sender_id,
+                            thumbnail_url=reel_info.get('thumbnail_url') if reel_info else None
+                        )
+                        logger.info(f"Reel media processing completed: {result}")
+                    except Exception as e:
+                        logger.error(f"Failed to process reel media: {str(e)}")
+    except Exception as e:
+        logger.error(f"Error processing media attachments: {str(e)}")
 
 
 def _extract_post_context(event):
@@ -711,13 +876,21 @@ def _extract_post_context(event):
             post_context['media_id'] = media_id
             logger.info(f"✅ Found media_id: {media_id}")
             
-            # Try to fetch the post caption using the media_id
-            caption = _fetch_post_caption_from_media_id(media_id)
-            if caption:
-                post_context['post_caption'] = caption
-                logger.info(f"✅ Fetched post caption: {caption}")
+            # Try to fetch the post caption and media URL using the media_id
+            media_info = _fetch_post_caption_from_media_id(media_id)
+            if media_info:
+                if media_info.get('caption'):
+                    post_context['post_caption'] = media_info['caption']
+                    logger.info(f"✅ Fetched post caption: {media_info['caption']}")
+                else:
+                    logger.warning(f"⚠️ Caption field is empty in API response: {media_info}")
+                
+                if media_info.get('media_url'):
+                    post_context['media_url'] = media_info['media_url']
+                    post_context['media_type'] = media_info.get('media_type', 'IMAGE')
+                    logger.info(f"✅ Fetched post media_url: {media_info['media_url']}")
             else:
-                logger.warning(f"❌ Failed to fetch caption for media_id: {media_id}")
+                logger.warning(f"❌ Failed to fetch media info for media_id: {media_id}")
         else:
             logger.info(f"❌ No media_id found in message_data: {message_data}")
         
@@ -755,26 +928,93 @@ def _extract_post_context(event):
                                 post_context['asset_id'] = asset_id
                                 post_context['share_url'] = url
                                 logger.info(f"✅ Extracted asset_id: {asset_id}")
-                                # Try to fetch the post caption using the asset_id
-                                caption = _fetch_post_caption_from_asset_id(asset_id)
-                                if caption:
-                                    post_context['post_caption'] = caption
-                                    logger.info(f"✅ Fetched post caption from asset_id: {caption}")
+                                # Try to fetch the post caption and media_url using the asset_id
+                                media_info = _fetch_post_caption_from_asset_id(asset_id)
+                                if media_info:
+                                    if media_info.get('caption'):
+                                        post_context['post_caption'] = media_info['caption']
+                                        logger.info(f"✅ Fetched post caption from asset_id: {media_info['caption']}")
+                                    if media_info.get('media_url'):
+                                        post_context['media_url'] = media_info['media_url']
+                                        post_context['media_type'] = media_info.get('media_type', 'IMAGE')
+                                        logger.info(f"✅ Fetched post media_url from asset_id: {media_info['media_url']}")
+                
+                # Handle Instagram reel attachment coming as 'ig_reel'
+                if attachment.get('type') == 'ig_reel' and 'payload' in attachment:
+                    payload = attachment['payload']
+                    reel_video_id = payload.get('reel_video_id')
+                    if reel_video_id:
+                        logger.info(f"🔍 IG_REEL attachment detected with reel_video_id: {reel_video_id}")
+                        reel_info = _fetch_reel_info(reel_video_id)
+                        if reel_info and reel_info.get('media_url'):
+                            post_context['reel_id'] = reel_video_id
+                            post_context['reel_url'] = reel_info.get('permalink') or payload.get('url')
+                            post_context['media_url'] = reel_info['media_url']
+                            post_context['media_type'] = reel_info.get('media_type', 'VIDEO')
+                            if reel_info.get('thumbnail_url'):
+                                post_context['thumbnail_url'] = reel_info['thumbnail_url']
+                            if reel_info.get('caption'):
+                                post_context['post_caption'] = reel_info['caption']
+                            logger.info(f"✅ Fetched reel media_url from API: {reel_info['media_url']}")
+                        else:
+                            logger.warning(f"❌ Failed to fetch reel info for reel_video_id: {reel_video_id}")
         
-        # Check for story context
+        # Check for story context - can be directly in message_data or in reply_to
+        story_data = None
         if 'story' in message_data:
             story_data = message_data['story']
-            post_context['story_id'] = story_data.get('id')
-            post_context['story_url'] = story_data.get('url')
+        elif 'reply_to' in message_data and 'story' in message_data.get('reply_to', {}):
+            story_data = message_data['reply_to']['story']
         
-        # Check for reel context
+        if story_data:
+            story_id = story_data.get('id')
+            post_context['story_id'] = story_id
+            post_context['story_url'] = story_data.get('url')
+            
+            # Try to fetch story media information
+            logger.info(f"🔍 Found story ID: {story_id}")
+            story_info = _fetch_story_info(story_id)
+            if story_info:
+                if story_info.get('media_url'):
+                    post_context['media_url'] = story_info['media_url']
+                    post_context['media_type'] = story_info.get('media_type', 'IMAGE')
+                    logger.info(f"✅ Fetched story media_url: {story_info['media_url']}")
+                # Stories don't have captions, so we'll rely on image matching
+                if story_info.get('caption'):
+                    post_context['post_caption'] = story_info['caption']
+                    logger.info(f"✅ Fetched story caption: {story_info['caption']}")
+            else:
+                logger.warning(f"❌ Failed to fetch story info for story_id: {story_id}")
+        
+        # Check for reel context - can be directly in message_data or in reply_to
+        reel_data = None
         if 'reel' in message_data:
             reel_data = message_data['reel']
-            post_context['reel_id'] = reel_data.get('id')
+        elif 'reply_to' in message_data and 'reel' in message_data.get('reply_to', {}):
+            reel_data = message_data['reply_to']['reel']
+        
+        if reel_data:
+            reel_id = reel_data.get('id')
+            post_context['reel_id'] = reel_id
             post_context['reel_url'] = reel_data.get('url')
+            logger.info(f"🔍 Found reel ID: {reel_id}")
+            reel_info = _fetch_reel_info(reel_id)
+            if reel_info:
+                if reel_info.get('media_url'):
+                    post_context['media_url'] = reel_info['media_url']
+                    post_context['media_type'] = reel_info.get('media_type', 'VIDEO')
+                    logger.info(f"✅ Fetched reel media_url: {reel_info['media_url']}")
+                if reel_info.get('thumbnail_url'):
+                    post_context['thumbnail_url'] = reel_info['thumbnail_url']
+                if reel_info.get('caption'):
+                    post_context['post_caption'] = reel_info['caption']
+                    logger.info(f"✅ Fetched reel caption: {reel_info['caption']}")
+            else:
+                logger.warning(f"❌ Failed to fetch reel info for reel_id: {reel_id}")
         
         logger.info(f"🔍 FINAL POST CONTEXT: {post_context}")
-        return post_context if post_context else None
+        # Return post_context if it has any keys (even if media_url exists without caption)
+        return post_context if post_context and len(post_context) > 0 else None
         
     except Exception as e:
         logger.error(f"Error extracting post context: {str(e)}")
@@ -783,13 +1023,13 @@ def _extract_post_context(event):
 
 def _fetch_post_caption_from_media_id(media_id):
     """
-    Fetch post caption from Instagram using media_id and Graph API.
+    Fetch post caption and media URL from Instagram using media_id and Graph API.
     
     Args:
         media_id: Instagram media ID
         
     Returns:
-        Post caption if successful, None otherwise
+        Dict with caption and media_url if successful, None otherwise
     """
     try:
         import requests
@@ -831,13 +1071,13 @@ def _fetch_post_caption_from_media_id(media_id):
         if response.status_code == 200:
             data = response.json()
             logger.info(f"🔍 API Response Data: {data}")
-            caption = data.get('caption', '')
-            if caption:
-                logger.info(f"✅ Successfully fetched caption: {caption}")
-                return caption
-            else:
-                logger.warning(f"⚠️ Caption field is empty in API response: {data}")
-                return None
+            
+            return {
+                'caption': data.get('caption', ''),
+                'media_url': data.get('media_url', ''),
+                'media_type': data.get('media_type', ''),
+                'permalink': data.get('permalink', '')
+            }
         else:
             logger.error(f"❌ Failed to fetch post caption: {response.status_code} - {response.text}")
             return None
@@ -847,15 +1087,124 @@ def _fetch_post_caption_from_media_id(media_id):
         return None
 
 
+def _fetch_story_info(story_id):
+    """
+    Fetch story information from Instagram using story_id and Graph API.
+    
+    Args:
+        story_id: Instagram story ID
+        
+    Returns:
+        Dict with media_url and caption if successful, None otherwise
+    """
+    try:
+        import requests
+        import os
+        
+        # Get the page access token from the business
+        from .models import Business
+        
+        business = Business.objects.filter(
+            page_access_token__isnull=False,
+            page_access_token__gt=''
+        ).first()
+        
+        if not business:
+            logger.error("No business found with page access token")
+            return None
+        
+        # Instagram Graph API endpoint for stories
+        graph_version = os.getenv('FB_GRAPH_VERSION', 'v17.0')
+        url = f"https://graph.facebook.com/{graph_version}/{story_id}"
+        
+        params = {
+            'fields': 'media_type,media_url,caption,permalink',
+            'access_token': business.page_access_token
+        }
+        
+        logger.info(f"🔍 Fetching story info for story_id: {story_id}")
+        logger.info(f"🔍 Using access token: {business.page_access_token[:10]}...")
+        logger.info(f"🔍 API URL: {url}")
+        
+        response = requests.get(url, params=params, timeout=10)
+        
+        logger.info(f"🔍 API Response Status: {response.status_code}")
+        
+        if response.status_code == 200:
+            data = response.json()
+            logger.info(f"🔍 API Response Data: {data}")
+            
+            return {
+                'caption': data.get('caption', ''),
+                'media_url': data.get('media_url', ''),
+                'media_type': data.get('media_type', 'IMAGE'),
+                'permalink': data.get('permalink', '')
+            }
+        else:
+            logger.error(f"❌ Failed to fetch story info: {response.status_code} - {response.text}")
+            return None
+            
+    except Exception as e:
+        logger.error(f"Error fetching story info from story_id {story_id}: {str(e)}")
+        return None
+
+
+def _fetch_reel_info(reel_id):
+    """
+    Fetch reel information from Instagram using reel_id and Graph API.
+    Returns media_url (video) and caption when available.
+    """
+    try:
+        import requests
+        import os
+        from .models import Business
+
+        business = Business.objects.filter(
+            page_access_token__isnull=False,
+            page_access_token__gt=''
+        ).first()
+        if not business:
+            logger.error("No business found with page access token")
+            return None
+
+        graph_version = os.getenv('FB_GRAPH_VERSION', 'v17.0')
+        url = f"https://graph.facebook.com/{graph_version}/{reel_id}"
+        params = {
+            'fields': 'media_type,media_url,thumbnail_url,caption,permalink',
+            'access_token': business.page_access_token
+        }
+        logger.info(f"🔍 Fetching reel info for reel_id: {reel_id}")
+        response = requests.get(url, params=params, timeout=10)
+        logger.info(f"🔍 API Response Status: {response.status_code}")
+        if response.status_code == 200:
+            data = response.json()
+            logger.info(f"🔍 API Response Data: {data}")
+            # Reels are typically VIDEO; fall back to IMAGE if API returns otherwise
+            media_type = data.get('media_type') or 'VIDEO'
+            return {
+                'caption': data.get('caption', ''),
+                'media_url': data.get('media_url', ''),
+                'media_type': media_type,
+                'thumbnail_url': data.get('thumbnail_url', ''),
+                'permalink': data.get('permalink', '')
+            }
+        else:
+            logger.error(f"❌ Failed to fetch reel info: {response.status_code} - {response.text}")
+            return None
+    except Exception as e:
+        logger.error(f"Error fetching reel info from reel_id {reel_id}: {str(e)}")
+        return None
+
+
 def _fetch_post_caption_from_asset_id(asset_id):
     """
-    Fetch post caption from Instagram using asset_id from Facebook CDN URL.
+    Fetch post caption and media_url from Instagram using asset_id from Facebook CDN URL.
     
     Args:
         asset_id: Asset ID from Facebook CDN URL
         
     Returns:
-        Post caption if successful, None otherwise
+        Dict with caption and media_url if successful, None otherwise
     """
     try:
         import requests
@@ -897,11 +1246,17 @@ def _fetch_post_caption_from_asset_id(asset_id):
             data = response.json()
             logger.info(f"🔍 API Response Data: {data}")
             caption = data.get('caption', '')
-            if caption:
-                logger.info(f"✅ Successfully fetched caption from asset_id: {caption}")
-                return caption
+            media_url = data.get('media_url', '')
+            if caption or media_url:
+                logger.info(f"✅ Successfully fetched data from asset_id: caption={bool(caption)}, media_url={bool(media_url)}")
+                return {
+                    'caption': caption,
+                    'media_url': media_url,
+                    'media_type': data.get('media_type', ''),
+                    'permalink': data.get('permalink', '')
+                }
             else:
-                logger.warning(f"⚠️ Caption field is empty in API response: {data}")
+                logger.warning(f"⚠️ Both caption and media_url are empty in API response: {data}")
                 return None
         else:
             logger.error(f"❌ Failed to fetch post caption from asset_id: {response.status_code} - {response.text}")

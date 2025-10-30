@@ -36,6 +36,7 @@ NGROK_URL = os.getenv('NGROK_URL', '')
 ALLOWED_HOSTS = [
     'localhost',
     '127.0.0.1',
+    '51006a5c54aa.ngrok-free.app' 
 ]
 
 # Add ngrok URL if provided
@@ -165,4 +166,45 @@ LOGOUT_REDIRECT_URL = 'core:home'
 # Supabase configuration
 SUPABASE_URL = os.getenv('SUPABASE_URL', '')
 SUPABASE_KEY = os.getenv('SUPABASE_SERVICE_ROLE_KEY', '')  # Use service role key for server-side operations
-SUPABASE_BUCKET = os.getenv('SUPABASE_BUCKET', 'product-images') 
+SUPABASE_BUCKET = os.getenv('SUPABASE_BUCKET', 'product-images')
+
+# OpenAI configuration
+OPENAI_API_KEY = os.getenv('OPENAI_API_KEY', '')
+
+# Image matching configuration
+IMAGE_MATCH_HIGH_CONFIDENCE = 0.70
+IMAGE_MATCH_LOW_CONFIDENCE = 0.55
+EMBEDDING_DIMENSION = 1536
+
+# Celery configuration
+CELERY_BROKER_URL = os.getenv('CELERY_BROKER_URL', 'redis://localhost:6379/0')
+CELERY_RESULT_BACKEND = os.getenv('CELERY_RESULT_BACKEND', 'redis://localhost:6379/0')
+CELERY_ACCEPT_CONTENT = ['json']
+CELERY_TASK_SERIALIZER = 'json'
+CELERY_RESULT_SERIALIZER = 'json'
+CELERY_TIMEZONE = TIME_ZONE
+
+# Logging configuration
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'verbose': {
+            'format': '{levelname} {asctime} {module} {message}',
+            'style': '{',
+        },
+    },
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+            'formatter': 'verbose',
+        },
+    },
+    'loggers': {
+        'core': {
+            'handlers': ['console'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+    },
+} 

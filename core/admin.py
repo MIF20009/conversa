@@ -2,7 +2,7 @@ from django.contrib import admin
 from django.utils.html import format_html
 from django.urls import reverse
 from django.utils import timezone
-from .models import Business, Product, Customer, MessageLog, Category
+from .models import Business, Product, Customer, MessageLog, Category, ProductEmbeddings, MediaToProductMap
 
 @admin.register(Business)
 class BusinessAdmin(admin.ModelAdmin):
@@ -143,3 +143,97 @@ class MessageLogAdmin(admin.ModelAdmin):
         return bool(obj.error_message)
     has_error.boolean = True
     has_error.short_description = 'Has Error'
+
+
+@admin.register(ProductEmbeddings)
+class ProductEmbeddingsAdmin(admin.ModelAdmin):
+    list_display = ('product', 'business', 'created_at', 'updated_at')
+    list_filter = ('business', 'created_at', 'updated_at')
+    search_fields = ('product__name', 'business__name')
+    raw_id_fields = ('product', 'business')
+    readonly_fields = ('created_at', 'updated_at', 'embedding_preview')
+    
+    fieldsets = (
+        ('Basic Information', {
+            'fields': ('product', 'business', 'image_url')
+        }),
+        ('Embedding Data', {
+            'fields': ('embedding_preview',),
+            'classes': ('collapse',)
+        }),
+        ('Timestamps', {
+            'fields': ('created_at', 'updated_at'),
+            'classes': ('collapse',)
+        })
+    )
+    
+    def embedding_preview(self, obj):
+        """Display a preview of the embedding vector"""
+        if obj.embedding:
+            try:
+                import json
+                embedding = json.loads(obj.embedding)
+                return f"Vector dimension: {len(embedding)}, First 5 values: {embedding[:5]}"
+            except:
+                return "Invalid embedding data"
+        return "No embedding data"
+    embedding_preview.short_description = 'Embedding Preview'
+    
+    actions = ['reindex_embeddings']
+    
+    def reindex_embeddings(self, request, queryset):
+        """Admin action to re-index embeddings for selected products"""
+        from .tasks import index_product_images
+        business_ids = list(queryset.values_list('business_id', flat=True).distinct())
+        
+        for business_id in business_ids:
+            try:
+                result = index_product_images(business_id)
+                if result.get('success'):
+                    self.message_user(
+                        request, 
+                        f'Re-indexed {result["indexed_count"]} products for business {business_id}'
+                    )
+                else:
+                    self.message_user(
+                        request, 
+                        f'Failed to re-index business {business_id}: {result.get("error")}', 
+                        level='ERROR'
+                    )
+            except Exception as e:
+                self.message_user(
+                    request, 
+                    f'Error re-indexing business {business_id}: {str(e)}', 
+                    level='ERROR'
+                )
+    
+    reindex_embeddings.short_description = 'Re-index embeddings for selected products'
+
+
+@admin.register(MediaToProductMap)
+class MediaToProductMapAdmin(admin.ModelAdmin):
+    list_display = ('media_id', 'product', 'business', 'confidence', 'created_at')
+    list_filter = ('business', 'confidence', 'created_at')
+    search_fields = ('media_id', 'product__name', 'business__name')
+    raw_id_fields = ('product', 'business')
+    readonly_fields = ('created_at',)
+    
+    fieldsets = (
+        ('Mapping Information', {
+            'fields': ('media_id', 'product', 'business', 'confidence')
+        }),
+        ('Timestamps', {
+            'fields': ('created_at',),
+            'classes': ('collapse',)
+        })
+    )
+    
+    actions = ['delete_selected_mappings']
+    
+    def delete_selected_mappings(self, request, queryset):
+        """Admin action to delete selected mappings"""
+        count = queryset.count()
+        queryset.delete()
+        self.message_user(request, f'Deleted {count} media-to-product mappings.')
+    
+    delete_selected_mappings.short_description = 'Delete selected mappings'

@@ -312,3 +312,57 @@ def verify_webhook_signature(payload: str, signature: str) -> bool:
     except Exception as e:
         logger.error(f"Error verifying webhook signature: {str(e)}")
         return False
+
+
+def fetch_media_info(media_id: str, page_access_token: str) -> Dict[str, Any]:
+    """
+    Fetch media information from Instagram Graph API.
+    
+    Args:
+        media_id: Instagram media ID
+        page_access_token: Page access token for the Instagram business account
+        
+    Returns:
+        Dict containing media information (caption, media_type, media_url, etc.)
+    """
+    try:
+        url = f"{GRAPH_API_BASE}/{media_id}"
+        
+        params = {
+            'fields': 'id,caption,media_type,media_url,thumbnail_url,permalink,timestamp',
+            'access_token': page_access_token
+        }
+        
+        response = requests.get(url, params=params)
+        response.raise_for_status()
+        
+        data = response.json()
+        
+        logger.info(f"Fetched media info for {media_id}: {data.get('media_type', 'unknown')}")
+        
+        return {
+            'success': True,
+            'media_id': data.get('id'),
+            'caption': data.get('caption', ''),
+            'media_type': data.get('media_type', 'IMAGE'),
+            'media_url': data.get('media_url'),
+            'thumbnail_url': data.get('thumbnail_url'),
+            'permalink': data.get('permalink'),
+            'timestamp': data.get('timestamp'),
+            'raw_data': data
+        }
+        
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Failed to fetch media info for {media_id}: {str(e)}")
+        return {
+            'success': False,
+            'error': f'API request failed: {str(e)}',
+            'media_id': media_id
+        }
+    except Exception as e:
+        logger.error(f"Unexpected error fetching media info for {media_id}: {str(e)}")
+        return {
+            'success': False,
+            'error': f'Unexpected error: {str(e)}',
+            'media_id': media_id
+        }
